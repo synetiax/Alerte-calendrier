@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Alerte Calendrier</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="theme-color" content="#4A90A4">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #fff; padding: 20px; padding-bottom: 100px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { font-size: 1.8em; margin-bottom: 5px; color: #4A90A4; }
+        .header .subtitle { color: #888; font-size: 0.9em; }
+        .status-card { background: rgba(255,255,255,0.1); border-radius: 15px; padding: 20px; margin-bottom: 20px; }
+        .status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .status-row:last-child { border-bottom: none; }
+        .status-label { color: #aaa; }
+        .status-value { font-weight: bold; }
+        .status-value.active { color: #4ade80; }
+        .status-value.inactive { color: #f87171; }
+        .status-value.warning { color: #fbbf24; }
+        .btn { display: block; width: 100%; padding: 15px; border: none; border-radius: 10px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
+        .btn-primary { background: linear-gradient(135deg, #4A90A4 0%, #357a8c 100%); color: white; }
+        .btn-google { background: linear-gradient(135deg, #4285f4 0%, #2b6cb0 100%); color: white; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: white; }
+        .btn-logout { background: rgba(239,68,68,0.2); color: #f87171; }
+        .btn:disabled { opacity: 0.5; }
+        .section-title { font-size: 1.2em; margin: 25px 0 15px; color: #4A90A4; }
+        .event-list { background: rgba(255,255,255,0.05); border-radius: 15px; overflow: hidden; }
+        .event-item { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .event-item:last-child { border-bottom: none; }
+        .event-title { font-weight: bold; margin-bottom: 5px; }
+        .event-time { color: #4A90A4; font-size: 0.9em; }
+        .event-calendar { color: #888; font-size: 0.8em; margin-top: 3px; }
+        .event-alert { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 10px; }
+        .event-alert.alert1 { background: #60a5fa; color: #000; }
+        .event-alert.alert2 { background: #f87171; color: #000; }
+        .no-events { text-align: center; padding: 30px; color: #888; }
+        .alert-config { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 15px; margin-bottom: 15px; }
+        .alert-config-title { font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .badge { padding: 3px 10px; border-radius: 15px; font-size: 0.8em; }
+        .badge.alert1 { background: #60a5fa; color: #000; }
+        .badge.alert2 { background: #f87171; color: #000; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+        .setting-label { flex: 1; }
+        input[type="number"] { width: 80px; padding: 8px; border: none; border-radius: 8px; background: rgba(255,255,255,0.1); color: white; text-align: center; }
+        .toggle { position: relative; width: 50px; height: 28px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.2); border-radius: 28px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: #4ade80; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(22px); }
+        .log-section { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 15px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8em; }
+        .log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .log-entry.error { color: #f87171; }
+        .log-entry.success { color: #4ade80; }
+        .log-entry.info { color: #60a5fa; }
+        .hidden { display: none !important; }
+        .next-alert { background: linear-gradient(135deg, #4A90A4 0%, #357a8c 100%); border-radius: 15px; padding: 20px; text-align: center; margin-bottom: 20px; }
+        .next-alert-title { font-size: 1.3em; font-weight: bold; margin-bottom: 5px; }
+        .next-alert-time { font-size: 0.95em; }
+        .next-alert-countdown { font-size: 2em; font-weight: bold; margin-top: 10px; color: #fbbf24; }
+        .test-buttons { display: flex; gap: 10px; }
+        .test-buttons .btn { flex: 1; }
+        .btn-alert1 { background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); color: #000; }
+        .btn-alert2 { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); color: #000; }
+        .user-info { background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.3); border-radius: 10px; padding: 15px; margin-bottom: 20px; text-align: center; }
+        .user-info .email { color: #4ade80; font-weight: bold; }
+        .user-info .secure { color: #888; font-size: 0.85em; margin-top: 5px; }
+        .login-container { text-align: center; padding: 40px 20px; }
+        .login-container p { color: #aaa; margin-bottom: 20px; }
+        .privacy-note { background: rgba(74,222,128,0.1); border-radius: 10px; padding: 15px; margin-top: 20px; font-size: 0.9em; color: #4ade80; }
+        .refresh-indicator { position: fixed; top: 10px; right: 10px; background: rgba(74,144,164,0.9); padding: 8px 15px; border-radius: 20px; font-size: 0.8em; opacity: 0; transition: opacity 0.3s; }
+        .refresh-indicator.show { opacity: 1; }
+        .sound-init { background: rgba(251,191,36,0.2); border: 1px solid rgba(251,191,36,0.5); border-radius: 10px; padding: 15px; margin-bottom: 20px; text-align: center; }
+        .sound-init button { background: #fbbf24; color: #000; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="refresh-indicator" id="refreshIndicator">🔄 Actualisation...</div>
+    <div class="header">
+        <h1>🔔 Alerte Calendrier</h1>
+        <p class="subtitle">2 alertes personnalisables • 100% privé</p>
+    </div>
+
+    <div id="loginSection" class="login-container">
+        <p>Connectez-vous avec votre compte Google pour accéder à vos calendriers de façon sécurisée.</p>
+        <button class="btn btn-google" onclick="handleLogin()">🔐 Se connecter avec Google</button>
+        <div class="privacy-note">🔒 <strong>100% Privé</strong><br>Vos données restent sur votre appareil.</div>
+    </div>
+
+    <div id="mainSection" class="hidden">
+        <div class="user-info">
+            <div class="email" id="userEmail">-</div>
+            <div class="secure">🔒 Connexion sécurisée</div>
+        </div>
+
+        <div class="sound-init" id="soundInit">
+            <p style="margin-bottom:10px;color:#fbbf24">⚠️ Appuyez pour activer les sons</p>
+            <button onclick="initSound()">🔊 Activer le son</button>
+        </div>
+
+        <div class="next-alert hidden" id="nextAlertCard">
+            <div style="font-size:0.9em;opacity:0.8;margin-bottom:5px">⏰ Prochaine alerte</div>
+            <div class="next-alert-title" id="nextAlertTitle">-</div>
+            <div class="next-alert-time" id="nextAlertTime">-</div>
+            <div class="next-alert-countdown" id="nextAlertCountdown">-</div>
+        </div>
+
+        <div class="status-card">
+            <div class="status-row"><span class="status-label">Notifications</span><span class="status-value" id="notifStatus">-</span></div>
+            <div class="status-row"><span class="status-label">Son</span><span class="status-value" id="soundStatus">Non activé</span></div>
+            <div class="status-row"><span class="status-label">Dernière vérification</span><span class="status-value" id="lastCheck">-</span></div>
+            <div class="status-row"><span class="status-label">Événements</span><span class="status-value" id="eventCount">0</span></div>
+        </div>
+
+        <button class="btn btn-primary" id="btnActivate" onclick="requestNotificationPermission()">🔔 Activer les notifications</button>
+        <button class="btn btn-secondary" onclick="refreshEvents()">🔄 Actualiser</button>
+        <div class="test-buttons">
+            <button class="btn btn-alert1" onclick="playSound1()">🔊 Test 1</button>
+            <button class="btn btn-alert2" onclick="playSound2()">🔊 Test 2</button>
+        </div>
+
+        <h2 class="section-title">⚙️ Alertes</h2>
+        <div class="alert-config">
+            <div class="alert-config-title"><span class="badge alert1">Alerte 1</span> Son doux (1h30)</div>
+            <div class="setting-row"><div class="setting-label">Minutes avant</div><input type="number" id="alert1Minutes" value="90" min="1" max="240" onchange="saveSettings()"></div>
+            <div class="setting-row"><div class="setting-label">Activée</div><label class="toggle"><input type="checkbox" id="alert1Enabled" checked onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="alert-config">
+            <div class="alert-config-title"><span class="badge alert2">Alerte 2</span> Son urgent (5 min)</div>
+            <div class="setting-row"><div class="setting-label">Minutes avant</div><input type="number" id="alert2Minutes" value="5" min="1" max="60" onchange="saveSettings()"></div>
+            <div class="setting-row"><div class="setting-label">Activée</div><label class="toggle"><input type="checkbox" id="alert2Enabled" checked onchange="saveSettings()"><span class="toggle-slider"></span></label></div>
+        </div>
+
+        <h2 class="section-title">📅 Événements (24h)</h2>
+        <div class="event-list" id="eventList"><div class="no-events">Chargement...</div></div>
+
+        <h2 class="section-title">📋 Journal</h2>
+        <div class="log-section" id="logSection"></div>
+        <button class="btn btn-secondary" style="margin-top:15px" onclick="clearLog()">🗑️ Effacer</button>
+        <button class="btn btn-logout" style="margin-top:10px" onclick="handleLogout()">🚪 Déconnexion</button>
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        const CLIENT_ID = '796837883156-24mpfr8tanbe5qiujkhq63mvg79h8s6r.apps.googleusercontent.com';
+        const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+        let tokenClient, accessToken = null, events = [], scheduledAlerts = new Map(), checkIntervalId = null, countdownIntervalId = null;
+        let audioContext = null;
+        let soundInitialized = false;
+
+        window.onload = function() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID, scope: SCOPES,
+                callback: (r) => { if (r.access_token) { accessToken = r.access_token; localStorage.setItem('accessToken', accessToken); onLoginSuccess(); } },
+            });
+            const saved = localStorage.getItem('accessToken');
+            if (saved) { accessToken = saved; checkToken(); }
+            
+            if (localStorage.getItem('soundInit')) {
+                document.getElementById('soundInit').classList.add('hidden');
+                document.getElementById('soundStatus').textContent = 'Prêt ✓';
+                document.getElementById('soundStatus').className = 'status-value active';
+            }
+            
+            initApp();
+        };
+
+        function initSound() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Jouer un son court pour débloquer
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                osc.frequency.value = 440;
+                gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                osc.start(audioContext.currentTime);
+                osc.stop(audioContext.currentTime + 0.3);
+                
+                soundInitialized = true;
+                localStorage.setItem('soundInit', 'true');
+                document.getElementById('soundInit').classList.add('hidden');
+                document.getElementById('soundStatus').textContent = 'Activé ✓';
+                document.getElementById('soundStatus').className = 'status-value active';
+                log('Son activé!', 'success');
+            } catch(e) {
+                log('Erreur: ' + e.message, 'error');
+            }
+        }
+
+        function ensureAudioContext() {
+            if (!audioContext || audioContext.state === 'closed') {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            return audioContext;
+        }
+
+        function playSound1() {
+            try {
+                const ctx = ensureAudioContext();
+                // Mélodie douce: Do Mi Sol Do (montante)
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                        osc.start(ctx.currentTime);
+                        osc.stop(ctx.currentTime + 0.4);
+                    }, i * 250);
+                });
+                log('🔔 Son 1 joué', 'success');
+            } catch(e) {
+                log('Erreur son: ' + e.message, 'error');
+            }
+        }
+
+        function playSound2() {
+            try {
+                const ctx = ensureAudioContext();
+                // Alarme urgente: bips alternés
+                for (let i = 0; i < 8; i++) {
+                    setTimeout(() => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'square';
+                        osc.frequency.value = i % 2 === 0 ? 880 : 1100;
+                        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                        osc.start(ctx.currentTime);
+                        osc.stop(ctx.currentTime + 0.12);
+                    }, i * 150);
+                }
+                log('🚨 Son 2 joué', 'success');
+            } catch(e) {
+                log('Erreur son: ' + e.message, 'error');
+            }
+        }
+
+        function checkToken() {
+            fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1', { headers: { 'Authorization': 'Bearer ' + accessToken } })
+            .then(r => { if (r.ok) { showMain(); refreshEvents(); } else { localStorage.removeItem('accessToken'); accessToken = null; } })
+            .catch(() => {});
+        }
+
+        function handleLogin() { tokenClient.requestAccessToken(); }
+        function onLoginSuccess() {
+            log('Connexion réussie!', 'success'); showMain();
+            fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { 'Authorization': 'Bearer ' + accessToken } })
+            .then(r => r.json()).then(d => { document.getElementById('userEmail').textContent = d.email; });
+            refreshEvents();
+        }
+        function handleLogout() { if (accessToken) google.accounts.oauth2.revoke(accessToken); accessToken = null; localStorage.removeItem('accessToken'); showLogin(); log('Déconnexion', 'info'); }
+        function showLogin() { document.getElementById('loginSection').classList.remove('hidden'); document.getElementById('mainSection').classList.add('hidden'); }
+        function showMain() { document.getElementById('loginSection').classList.add('hidden'); document.getElementById('mainSection').classList.remove('hidden'); }
+
+        function initApp() { log('App démarrée', 'info'); loadSettings(); updateNotifStatus(); startCountdown(); }
+        function log(m, t = '') { const l = document.getElementById('logSection'), e = document.createElement('div'); e.className = 'log-entry ' + t; e.textContent = `[${new Date().toLocaleTimeString('fr-CA')}] ${m}`; l.insertBefore(e, l.firstChild); while (l.children.length > 50) l.removeChild(l.lastChild); }
+        function clearLog() { document.getElementById('logSection').innerHTML = ''; log('Journal effacé', 'info'); }
+        function saveSettings() { localStorage.setItem('alertSettings', JSON.stringify(getSettings())); log('Sauvegardé', 'success'); scheduleAlerts(); }
+        function loadSettings() { const s = localStorage.getItem('alertSettings'); if (s) { const p = JSON.parse(s); document.getElementById('alert1Minutes').value = p.alert1Minutes || 90; document.getElementById('alert1Enabled').checked = p.alert1Enabled !== false; document.getElementById('alert2Minutes').value = p.alert2Minutes || 5; document.getElementById('alert2Enabled').checked = p.alert2Enabled !== false; } }
+        function getSettings() { return { alert1Minutes: parseInt(document.getElementById('alert1Minutes').value) || 90, alert1Enabled: document.getElementById('alert1Enabled').checked, alert2Minutes: parseInt(document.getElementById('alert2Minutes').value) || 5, alert2Enabled: document.getElementById('alert2Enabled').checked }; }
+        async function requestNotificationPermission() { if ('Notification' in window) { const p = await Notification.requestPermission(); log('Permission: ' + p, p === 'granted' ? 'success' : 'error'); updateNotifStatus(); } }
+        function updateNotifStatus() { const s = document.getElementById('notifStatus'), b = document.getElementById('btnActivate'); if (!('Notification' in window)) { s.textContent = 'Non supporté'; s.className = 'status-value inactive'; } else if (Notification.permission === 'granted') { s.textContent = 'Activées ✓'; s.className = 'status-value active'; b.classList.add('hidden'); } else if (Notification.permission === 'denied') { s.textContent = 'Refusées'; s.className = 'status-value inactive'; b.disabled = true; } else { s.textContent = 'En attente'; s.className = 'status-value warning'; } }
+
+        async function refreshEvents() {
+            if (!accessToken) return;
+            document.getElementById('refreshIndicator').classList.add('show');
+            log('Récupération...', 'info'); events = [];
+            const now = new Date(), tmrw = new Date(now.getTime() + 86400000);
+            try {
+                const cl = await (await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', { headers: { 'Authorization': 'Bearer ' + accessToken } })).json();
+                if (cl.error) { log('Session expirée', 'error'); handleLogout(); return; }
+                const cals = cl.items.filter(c => c.id.includes('synetiax') || c.id.includes('parent.maeva') || c.id.includes('family') || (c.summary && c.summary.toLowerCase().includes('family')));
+                for (const c of cals) {
+                    try {
+                        const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(c.id)}/events?timeMin=${now.toISOString()}&timeMax=${tmrw.toISOString()}&singleEvents=true&orderBy=startTime`, { headers: { 'Authorization': 'Bearer ' + accessToken } });
+                        if (r.ok) { const d = await r.json(); if (d.items?.length) { events = events.concat(d.items.map(e => ({ id: e.id, title: e.summary || 'Sans titre', start: new Date(e.start.dateTime || e.start.date), calendar: c.summary || c.id.split('@')[0], allDay: !e.start.dateTime }))); log(`${d.items.length} - ${c.summary || c.id.split('@')[0]}`, 'success'); } }
+                    } catch (e) {}
+                }
+                events.sort((a, b) => a.start - b.start); displayEvents(); scheduleAlerts();
+                document.getElementById('lastCheck').textContent = new Date().toLocaleTimeString('fr-CA');
+                document.getElementById('eventCount').textContent = events.length;
+                log(`Total: ${events.length}`, 'info');
+            } catch (e) { log('Erreur: ' + e.message, 'error'); }
+            document.getElementById('refreshIndicator').classList.remove('show');
+            if (checkIntervalId) clearInterval(checkIntervalId);
+            checkIntervalId = setInterval(() => { if (accessToken) refreshEvents(); }, 300000);
+        }
+
+        function displayEvents() {
+            const c = document.getElementById('eventList'), s = getSettings(), now = new Date();
+            if (!events.length) { c.innerHTML = '<div class="no-events">Aucun événement</div>'; document.getElementById('nextAlertCard').classList.add('hidden'); return; }
+            c.innerHTML = events.map(e => {
+                const a1 = new Date(e.start.getTime() - s.alert1Minutes*60000), a2 = new Date(e.start.getTime() - s.alert2Minutes*60000);
+                return `<div class="event-item"><div class="event-title">${e.title}${s.alert1Enabled && a1 > now ? `<span class="event-alert alert1">${s.alert1Minutes}m</span>` : ''}${s.alert2Enabled && a2 > now ? `<span class="event-alert alert2">${s.alert2Minutes}m</span>` : ''}</div><div class="event-time">${e.allDay ? 'Journée' : e.start.toLocaleTimeString('fr-CA', {hour:'2-digit',minute:'2-digit'})}</div><div class="event-calendar">📅 ${e.calendar}</div></div>`;
+            }).join('');
+        }
+
+        function scheduleAlerts() {
+            scheduledAlerts.forEach(t => clearTimeout(t)); scheduledAlerts.clear();
+            const s = getSettings(), now = new Date();
+            events.forEach(e => {
+                if (e.allDay) return;
+                if (s.alert1Enabled) { const t = e.start.getTime() - s.alert1Minutes*60000 - now.getTime(); if (t > 0) { scheduledAlerts.set(e.id+'-1', setTimeout(() => trigger(e, 1, s.alert1Minutes), t)); log(`Alerte 1 programmée: ${e.title}`, 'info'); } }
+                if (s.alert2Enabled) { const t = e.start.getTime() - s.alert2Minutes*60000 - now.getTime(); if (t > 0) { scheduledAlerts.set(e.id+'-2', setTimeout(() => trigger(e, 2, s.alert2Minutes), t)); log(`Alerte 2 programmée: ${e.title}`, 'info'); } }
+            });
+            updateNextAlert();
+        }
+
+        function updateNextAlert() {
+            const s = getSettings(), now = new Date(); let next = null;
+            events.forEach(e => { if (e.allDay) return; if (s.alert1Enabled) { const t = new Date(e.start.getTime() - s.alert1Minutes*60000); if (t > now && (!next || t < next.time)) next = {event:e, time:t, num:1}; } if (s.alert2Enabled) { const t = new Date(e.start.getTime() - s.alert2Minutes*60000); if (t > now && (!next || t < next.time)) next = {event:e, time:t, num:2}; } });
+            const card = document.getElementById('nextAlertCard');
+            if (next) { card.classList.remove('hidden'); document.getElementById('nextAlertTitle').textContent = next.event.title; document.getElementById('nextAlertTime').textContent = `Alerte ${next.num} à ${next.time.toLocaleTimeString('fr-CA', {hour:'2-digit',minute:'2-digit'})}`; }
+            else card.classList.add('hidden');
+        }
+
+        function startCountdown() {
+            if (countdownIntervalId) clearInterval(countdownIntervalId);
+            countdownIntervalId = setInterval(() => {
+                const s = getSettings(), now = new Date(); let next = null;
+                events.forEach(e => { if (e.allDay) return; if (s.alert1Enabled) { const t = new Date(e.start.getTime() - s.alert1Minutes*60000); if (t > now && (!next || t < next)) next = t; } if (s.alert2Enabled) { const t = new Date(e.start.getTime() - s.alert2Minutes*60000); if (t > now && (!next || t < next)) next = t; } });
+                if (next) { const d = next - now; if (d > 0) { const h = Math.floor(d/3600000), m = Math.floor((d%3600000)/60000), sec = Math.floor((d%60000)/1000); document.getElementById('nextAlertCountdown').textContent = (h > 0 ? h+'h ' : '') + m + 'm ' + sec + 's'; } }
+            }, 1000);
+        }
+
+        function trigger(e, n, m) {
+            log(`🔔 ${n===1?'Rappel':'URGENT'}: "${e.title}" dans ${m}min!`, n===1?'success':'error');
+            if (Notification.permission === 'granted') new Notification((n===1?'Rappel':'⚠️ URGENT') + ` - ${m}min`, { body: e.title, icon: 'icon-192.png', requireInteraction: true });
+            if (n === 1) playSound1(); else playSound2();
+            updateNextAlert();
+        }
+
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && accessToken) refreshEvents(); });
+    </script>
+</body>
+</html>
